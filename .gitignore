@@ -1,0 +1,6 @@
+.haxelib/
+.haxelsp/recording/
+dump/
+
+package/
+.env
