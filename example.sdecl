@@ -1,0 +1,13 @@
+// type ommitted (Node)
+#node1 { // id
+    attr: true
+    
+    Button #node2 {
+        attr1: 0
+        attr2: ident
+    }
+
+    Button {
+        attr3: "qwerty"
+    }
+}
