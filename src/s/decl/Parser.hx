@@ -1,70 +1,167 @@
 package s.decl;
 
-import s.decl.parser.Token;
-import s.decl.parser.Lexer;
+using StringTools;
+
+function isDigit(char:String) {
+	final c = char.fastCodeAt(0);
+	return c >= "0".code && c <= "9".code;
+}
+
+function isAlpha(char:String) {
+	final c = char.fastCodeAt(0);
+	return c >= "A".code && c <= "Z".code || c >= "a".code && c <= "z".code;
+}
+
+class ParserError extends haxe.Exception {}
+final RESERVED = ["name", "type", "children"];
 
 class Parser {
-	final lexer:Lexer;
+	var i:Int = -1;
 
-	public function new(source:String, ?path:String = "source")
-		lexer = new Lexer(source, path);
+	final source:String;
+	final path:String;
 
-	public function parse(?type:String, ?name:String):Node {
-		var node = new Node(type, name);
-		parseNode(node);
-		return node;
+	public function new(source:String, ?path:String = "source") {
+		this.source = source;
+		this.path = path;
 	}
 
-	function parseNode(node:Node)
-		switch lexer.token() {
-			case THash:
-				switch lexer.token() {
-					case TIdent(name): // node name
-						switch lexer.token() {
-							case TBrOpen: parseNodeChild(node, null, name);
-							case TIdent(type):
-								switch lexer.token() {
-									case TBrOpen: parseNodeChild(node, type, name);
-									case x: lexer.error('{ expected. Got: ${toString(x)}');
-								}
-							case x: lexer.error('{ or identifier expected. Got: ${toString(x)}');
-						}
-					case x: lexer.error('identifier expected. Got: ${toString(x)}');
-				}
-				parseNode(node);
-			case TIdent(value): // node type or attribute name
-				switch lexer.token() {
-					case THash:
-						switch lexer.token() {
-							case TIdent(name): // node name
-								switch lexer.token() {
-									case TBrOpen: parseNodeChild(node, value, name);
-									case x: lexer.error('{ expected. Got: ${toString(x)}');
-								}
-							case x: lexer.error('identifier expected. Got: ${toString(x)}');
-						}
-					case TBrOpen: parseNodeChild(node, value, null);
-					case TDbDot: parseNodeAttr(node, value);
-					case x: lexer.error('{, # or : expected. Got: ${toString(x)}');
-				}
-				parseNode(node);
-			case TLineBreak:
-				parseNode(node);
-			case TBrClose, TEof:
+	public function parse(?type:String, ?name:String):Node {
+		var decl = new Node(type, name);
+		parseDecl(decl, true);
+		return decl;
+	}
+
+	function parseDecl(decl:Node, ?finishOnEof:Bool = false) {
+		function parseDeclWithName(type:String, name:String)
+			switch advance() {
+				case "{":
+					var d = new Node(type, name);
+					parseDecl(d);
+					decl.addChild(d);
+				case "\n", "\t", "\r", " ": // skip spaces
+					parseDeclWithName(type, name);
+				case x:
+					error('{ or identifier expected. Got: $x');
+			}
+
+		function parseDeclName(type:String)
+			switch advance() {
+				case x if (isAlpha(x)):
+					var buf = new StringBuf();
+					buf.add(x);
+					parseDeclWithName(type, parseIdent(buf));
+				case x:
+					error('identifier expected. Got: $x');
+			}
+
+		function parseDeclWithValue(value:String)
+			switch advance() {
+				case "#":
+					parseDeclName(value);
+				case "{":
+					var d = new Node(value, null);
+					parseDecl(d);
+					decl.addChild(d);
+				case ":":
+					if (RESERVED.contains(value))
+						error('"$value" cannot be used as an attribute name');
+					decl.set(value, parseDeclAttr(new StringBuf()));
+				case "\n", "\t", "\r", " ": // skip spaces
+					parseDeclWithValue(value);
+				case x:
+					error('{, # or : expected. Got: $x');
+			}
+
+		switch advance() {
+			case "#":
+				parseDeclName(null);
+				parseDecl(decl, finishOnEof);
+			case x if (isAlpha(x)): // decl type or decl attr name
+				var buf = new StringBuf();
+				buf.add(x);
+				parseDeclWithValue(parseIdent(buf));
+				parseDecl(decl, finishOnEof);
+			case "\n", "\t", "\r", " ": // skip spaces
+				parseDecl(decl, finishOnEof);
+			case "}":
+				return;
+			case x if (StringTools.isEof(x.fastCodeAt(0)) && finishOnEof):
 				return;
 			case x:
-				lexer.error('} or [#]identifier expected. Got: ${toString(x)}');
+				error('} or [#]identifier expected. Got: $x');
 		}
+	}
 
-	function parseNodeChild(node, ?type:String, ?name:String)
-		node.addChild(parse(type, name));
-
-	function parseNodeAttr(node:Node, name:String)
-		switch lexer.token() {
-			// TODO: divide values
-			case TIdent(value), TNumber(value), TString(value):
-				node.set(name, value);
+	function parseDeclAttr(buf:StringBuf)
+		return switch advance() {
+			case "\t", "\r", " ": // skip spaces
+				parseDeclAttr(buf);
+			case "\n", ";":
+				buf.toString();
+			case "}":
+				revert();
+				buf.toString();
+			case "\"":
+				buf.add('"${parseString(new StringBuf())}"');
+				parseDeclAttr(buf);
+			case x if (StringTools.isEof(x.fastCodeAt(0))):
+				error("Unexpected End of file");
 			case x:
-				lexer.error('Number, string or identifier expected. Got: ${toString(x)}');
+				buf.add(x);
+				parseDeclAttr(buf);
 		}
+
+	function parseIdent(buf:StringBuf):String
+		return switch next() {
+			case x if (isAlpha(x) || isDigit(x)):
+				buf.add(x);
+				junk();
+				parseIdent(buf);
+			default:
+				buf.toString();
+		}
+
+	function parseString(buf:StringBuf):String
+		return switch advance(false) {
+			case "\"":
+				buf.toString();
+			case "\\": // escape character
+				buf.add("\\");
+				buf.add(next());
+				junk();
+				parseString(buf);
+			case x if (StringTools.isEof(x.fastCodeAt(0))):
+				error("Unexpected End of file");
+			case x:
+				buf.add(x);
+				parseString(buf);
+		}
+
+	function junk():Void
+		i++;
+
+	function revert():Void
+		i--;
+
+	function advance(skipComments:Bool = true):String {
+		var c = source.charAt(++i);
+		if (skipComments)
+			return switch c {
+				case "/" if (next() == "/"):
+					var x = advance();
+					while (x != "\n" && !StringTools.isEof(x.fastCodeAt(0)))
+						x = advance();
+					x;
+				case x: x;
+			}
+		else
+			return c;
+	}
+
+	function next():String
+		return source.charAt(i + 1);
+
+	function error(message:String)
+		return throw new ParserError('$path: $message');
 }

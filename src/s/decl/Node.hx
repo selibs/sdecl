@@ -1,15 +1,5 @@
 package s.decl;
 
-enum NodeAttribute {
-	ANull;
-	ABool(value:Bool);
-	AInt(value:Int);
-	AFloat(value:Float);
-	AString(value:String);
-	AIdentifier(value:String);
-	AArray(value:Array<NodeAttribute>);
-}
-
 class Node {
 	public static function parse(source:String, ?path:String = "source")
 		return new s.decl.Parser(source, path).parse();
@@ -19,8 +9,8 @@ class Node {
 
 	public final type:String;
 	public final name:String;
-	public final attributes:Map<String, String> = [];
 	public final children:Array<Node> = [];
+	public final attributes:Map<String, String> = [];
 
 	public function new(type:String = "Node", ?name:String) {
 		this.type = type;
@@ -38,6 +28,23 @@ class Node {
 
 	public inline function set(attr:String, value:String)
 		this.attributes.set(attr, value);
+
+	public function toXml():Xml {
+		var el = Xml.createElement(type);
+		el.set("name", name ?? "");
+		for (attr in attributes.keyValueIterator())
+			el.set(attr.key, Std.string(attr.value));
+		for (c in children)
+			el.addChild(c.toXml());
+		return el;
+	}
+
+	public function toJson():Dynamic {
+		var el = {type: type, name: name, children: [for (c in children) c.toJson()]};
+		for (attr in attributes.keyValueIterator())
+			Reflect.setField(el, attr.key, attr.value);
+		return el;
+	}
 
 	public function toString():String {
 		var at = [for (k in attributes.keys()) '    $k: ${attributes.get(k)}'];

@@ -5,10 +5,15 @@ import s.decl.Node;
 class Main {
 	public static function main() {
 		var sdecl = Node.parseFile("example.sdecl");
-
-		trace(sdecl.children[0].children.length);
+		var c = sdecl.children[0];
+		
+		trace(c.type);
+		trace(c.name);
+		trace(c.children.length);
 		trace(sdecl.children[0].get("attr"));
 
-		trace(sdecl);
+		trace(sdecl.toString());
+		trace(sdecl.toJson());
+		trace(sdecl.toXml());
 	}
 }

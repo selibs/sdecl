@@ -1,13 +1,17 @@
+global: 0
+global1 : 1
+
 // type ommitted (Node)
 #node1 { // id
-    attr: true
-    
+    a: true
+    arr: [0]
+
+    Button { attr3: "\"string\"" }
+
+    #label { prop: 1 }
+
     Button #node2 {
         attr1: 0
         attr2: ident
-    }
-
-    Button {
-        attr3: "qwerty"
     }
 }
