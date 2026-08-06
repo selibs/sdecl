@@ -1,27 +1,18 @@
-#define a 0
-
-global: #a
+global: 0
 global1 : 1
 
 // type ommitted (Node)
 @node1 { // id
     a: true
-    arr: [#a]
+    arr: [0]
 
-    #undef a
+    Button { attr3: "string\"" + 1; attr32: false }
 
-    Button { attr3: "string\"" + 1 }
-
-    @label { prop: 1 }
+    @label { }
 
     // default node
     {
         someprop: true
-        #if true
-        otherprop1: false
-        #elif
-        otherprop2: false
-        #endif
     }
 
     Button @node2 {

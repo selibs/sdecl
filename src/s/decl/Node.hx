@@ -47,25 +47,43 @@ class Node {
 	}
 
 	public function toString():String {
-		var at = [for (k in attributes.keys()) '    $k: ${attributes.get(k)}'];
-		var ch = [for (c in children) c.toString().split("\n").map(s -> "    " + s).join("\n")];
+		var buf = new StringBuf();
 
-		var s = type != null ? type : "";
-		if (name != null)
-			s += " @" + name;
-		s += " {\n";
+		// type
+		if (type != null)
+			buf.add(type);
 
-		if (at.length > 0) {
-			s += at.join("\n");
-			if (ch.length > 0)
-				s += "\n\n";
+		// name
+		if (name != null) {
+			buf.add(" @");
+			buf.add(name);
 		}
 
-		if (ch.length > 0)
-			s += ch.join("\n\n");
+		// {
+		buf.add(" {\n");
 
-		s += "\n}";
+		// attributes
+		for (attr in attributes.keyValueIterator()) {
+			buf.add("    ");
+			buf.add(attr.key);
+			buf.add(": ");
+			buf.add(attr.value);
+			buf.add("\n");
+		}
 
-		return s;
+		// children
+		for (child in children) {
+			buf.add("\n");
+			for (line in child.toString().split("\n")) {
+				buf.add("    ");
+				buf.add(line);
+				buf.add("\n");
+			}
+		}
+
+		// }
+		buf.add("}");
+
+		return buf.toString();
 	}
 }
