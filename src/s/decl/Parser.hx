@@ -17,19 +17,23 @@ function isSpace(c:Int)
 function isBreak(c:Int)
 	return c == "\n".code;
 
+/** Thrown when sdecl parsing fails. */
 class ParserError extends haxe.Exception {}
 
+/** Parses sdecl source into a `Node` tree. */
 class Parser {
 	var i:Int = -1;
 
 	final source:String;
 	final path:String;
 
+	/** Creates a parser for sdecl source text. */
 	public function new(source:String, ?path:String = "source") {
 		this.source = source;
 		this.path = path;
 	}
 
+	/** Parses the source text into a root node. */
 	public function parse(?type:String, ?name:String):Node {
 		var node = new Node(type, name);
 		parseNode(node, true);

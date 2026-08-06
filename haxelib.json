@@ -1,6 +1,5 @@
 {
     "classPath": "src",
-    "main": "run.Main",
-    "contributors": ["AUTHOR_NAME"],
+    "contributors": ["smoothie"],
     "dependencies": {}
 }
