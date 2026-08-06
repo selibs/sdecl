@@ -50,9 +50,9 @@ class Node {
 		var at = [for (k in attributes.keys()) '    $k: ${attributes.get(k)}'];
 		var ch = [for (c in children) c.toString().split("\n").map(s -> "    " + s).join("\n")];
 
-		var s = type;
+		var s = type != null ? type : "";
 		if (name != null)
-			s += " #" + name;
+			s += " @" + name;
 		s += " {\n";
 
 		if (at.length > 0) {

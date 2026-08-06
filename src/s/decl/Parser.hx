@@ -13,7 +13,8 @@ function isAlpha(char:String) {
 }
 
 class ParserError extends haxe.Exception {}
-final RESERVED = ["name", "type", "children"];
+final ATTR_NAMES_RESERVED = ["name", "type", "children"];
+final DIRECTIVE_NAMES = ["define", "undef", "ifdef", "if", "elif", "else", "endif"];
 
 class Parser {
 	var i:Int = -1;
@@ -27,90 +28,87 @@ class Parser {
 	}
 
 	public function parse(?type:String, ?name:String):Node {
-		var decl = new Node(type, name);
-		parseDecl(decl, true);
-		return decl;
+		var node = new Node(type, name);
+		parseNode(node, true);
+		return node;
 	}
 
-	function parseDecl(decl:Node, ?finishOnEof:Bool = false) {
-		function parseDeclWithName(type:String, name:String)
-			switch advance() {
+	function parseNode(node:Node, ?finishOnEof:Bool = false) {
+		function parseNodeChild(type:String, name:String) {
+			var d = new Node(type, name);
+			parseNode(d);
+			node.addChild(d);
+		}
+
+		function parseNodeWithName(type:String, name:String)
+			switch char() {
 				case "{":
-					var d = new Node(type, name);
-					parseDecl(d);
-					decl.addChild(d);
+					parseNodeChild(type, name);
 				case "\n", "\t", "\r", " ": // skip spaces
-					parseDeclWithName(type, name);
+					parseNodeWithName(type, name);
 				case x:
 					error('{ or identifier expected. Got: $x');
 			}
 
-		function parseDeclName(type:String)
-			switch advance() {
-				case x if (isAlpha(x)):
-					var buf = new StringBuf();
-					buf.add(x);
-					parseDeclWithName(type, parseIdent(buf));
-				case x:
-					error('identifier expected. Got: $x');
-			}
-
-		function parseDeclWithValue(value:String)
-			switch advance() {
-				case "#":
-					parseDeclName(value);
+		function parseNodeWithValue(value:String)
+			switch char() {
+				case "@":
+					parseNodeWithName(value, expectIdent());
 				case "{":
-					var d = new Node(value, null);
-					parseDecl(d);
-					decl.addChild(d);
+					parseNodeChild(value, null);
 				case ":":
-					if (RESERVED.contains(value))
+					if (ATTR_NAMES_RESERVED.contains(value))
 						error('"$value" cannot be used as an attribute name');
-					decl.set(value, parseDeclAttr(new StringBuf()));
+					node.set(value, expectValue());
 				case "\n", "\t", "\r", " ": // skip spaces
-					parseDeclWithValue(value);
+					parseNodeWithValue(value);
 				case x:
-					error('{, # or : expected. Got: $x');
+					error('{, @ or : expected. Got: $x');
 			}
 
-		switch advance() {
-			case "#":
-				parseDeclName(null);
-				parseDecl(decl, finishOnEof);
-			case x if (isAlpha(x)): // decl type or decl attr name
+		switch char() {
+			case "@":
+				parseNodeWithName(null, expectIdent());
+				parseNode(node, finishOnEof);
+			case x if (isAlpha(x)): // node type or node attr name
 				var buf = new StringBuf();
 				buf.add(x);
-				parseDeclWithValue(parseIdent(buf));
-				parseDecl(decl, finishOnEof);
+				parseNodeWithValue(parseIdent(buf));
+				parseNode(node, finishOnEof);
+			case "{": // node with no type and name
+				parseNodeChild(null, null);
 			case "\n", "\t", "\r", " ": // skip spaces
-				parseDecl(decl, finishOnEof);
+				parseNode(node, finishOnEof);
 			case "}":
 				return;
 			case x if (StringTools.isEof(x.fastCodeAt(0)) && finishOnEof):
 				return;
 			case x:
-				error('} or [#]identifier expected. Got: $x');
+				error('} or [@]identifier expected. Got: $x');
 		}
 	}
 
-	function parseDeclAttr(buf:StringBuf)
-		return switch advance() {
+	function parseValue(buf:StringBuf)
+		return switch char() {
 			case "\t", "\r", " ": // skip spaces
-				parseDeclAttr(buf);
+				parseValue(buf);
 			case "\n", ";":
 				buf.toString();
 			case "}":
 				revert();
 				buf.toString();
 			case "\"":
-				buf.add('"${parseString(new StringBuf())}"');
-				parseDeclAttr(buf);
+				buf.add('"${expectString()}"');
+				parseValue(buf);
 			case x if (StringTools.isEof(x.fastCodeAt(0))):
 				error("Unexpected End of file");
 			case x:
 				buf.add(x);
-				parseDeclAttr(buf);
+				parseValue(buf);
 		}
+
+	function expectValue():String
+		return parseValue(new StringBuf());
 
 	function parseIdent(buf:StringBuf):String
 		return switch next() {
@@ -122,8 +120,20 @@ class Parser {
 				buf.toString();
 		}
 
+	function expectIdent():String
+		return switch char() {
+			case "\t", "\r", " ": // skip spaces
+				expectIdent();
+			case x if (isAlpha(x)):
+				var buf = new StringBuf();
+				buf.add(x);
+				parseIdent(buf);
+			case x:
+				error('Identifier expected. Got: "$x"');
+		}
+
 	function parseString(buf:StringBuf):String
-		return switch advance(false) {
+		return switch char(false) {
 			case "\"":
 				buf.toString();
 			case "\\": // escape character
@@ -138,26 +148,34 @@ class Parser {
 				parseString(buf);
 		}
 
+	function expectString():String
+		return parseString(new StringBuf());
+
 	function junk():Void
 		i++;
 
 	function revert():Void
 		i--;
 
-	function advance(skipComments:Bool = true):String {
-		var c = source.charAt(++i);
-		if (skipComments)
-			return switch c {
-				case "/" if (next() == "/"):
-					var x = advance();
-					while (x != "\n" && !StringTools.isEof(x.fastCodeAt(0)))
-						x = advance();
-					x;
-				case x: x;
-			}
-		else
+	function char(skipComments:Bool = true):String {
+		var c = advance();
+
+		if (!skipComments)
 			return c;
+
+		switch c {
+			case "/" if (next() == "/"):
+				var x = char();
+				while (x != "\n" && !StringTools.isEof(x.fastCodeAt(0)))
+					x = char();
+				return x;
+			default:
+				return c;
+		}
 	}
+
+	function advance():String
+		return source.charAt(++i);
 
 	function next():String
 		return source.charAt(i + 1);

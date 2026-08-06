@@ -10,7 +10,7 @@ class Main {
 		trace(c.type);
 		trace(c.name);
 		trace(c.children.length);
-		trace(sdecl.children[0].get("attr"));
+		trace(sdecl.children[0].get("arr"));
 
 		trace(sdecl.toString());
 		trace(sdecl.toJson());
