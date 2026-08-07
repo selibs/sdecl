@@ -43,7 +43,7 @@ def read_json_file(path: str | Path) -> dict:
 
 def load_config() -> dict:
     if not CONFIG_PATH.exists():
-        fail("haxelib.json not found")
+        return {}
 
     return read_json_file(CONFIG_PATH)
 

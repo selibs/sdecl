@@ -37,7 +37,7 @@ jobs:
           rm -rf package
           mkdir package
 
-          CLASS_PATH=$(python3 -c "import json; from pathlib import Path; data=json.loads(Path('haxelib.json').read_text(encoding='utf-8')); print(data.get('classPath', 'src'))")
+          CLASS_PATH=$(python3 -c "import json; from pathlib import Path; path=Path('haxelib.json'); data=json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}; print(data.get('classPath') or 'src')")
           if [ ! -d "$CLASS_PATH" ]; then
             echo "Missing classPath directory: $CLASS_PATH"
             exit 1
@@ -46,11 +46,19 @@ jobs:
           mkdir -p "package/$(dirname "$CLASS_PATH")"
           cp -r "$CLASS_PATH" "package/$CLASS_PATH"
 
-          if [ -d run ]; then cp -r run package/run; fi
+          if [ -d cli ]; then cp -r cli package/cli; fi
+          if [ -f build_cli.hxml ]; then cp build_cli.hxml package/build_cli.hxml; fi
 
           if [ -f README.md ]; then cp README.md package/README.md; fi
           if [ -f LICENSE ]; then cp LICENSE package/LICENSE; fi
           if [ -f CHANGELOG.md ]; then cp CHANGELOG.md package/CHANGELOG.md; fi
+
+      - name: Build CLI package
+        run: |
+          if [ -f package/build_cli.hxml ]; then
+            cd package
+            haxe build_cli.hxml
+          fi
 
       - name: Generate haxelib.json
         env:

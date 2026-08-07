@@ -60,5 +60,5 @@ Each parsed node contains:
 Run tests:
 
 ```bash
-haxe tests.hxml
+haxe build_tests.hxml
 ```
