@@ -17,6 +17,12 @@ function isSpace(c:Int)
 function isBreak(c:Int)
 	return c == "\n".code;
 
+function isOpenBracket(c:Int)
+	return c == "[".code || c == "{".code || c == "(".code;
+
+function isCloseBracket(c:Int)
+	return c == "]".code || c == "}".code || c == ")".code;
+
 /** Thrown when sdecl parsing fails. */
 class ParserError extends haxe.Exception {}
 
@@ -95,16 +101,37 @@ class Parser {
 	function parseValue() {
 		var buf = new StringBuf();
 
+		var br = 0;
+		var bk = 0;
+		var pr = 0;
+
 		while (true)
 			switch char() {
-				case "\n".code, ";".code:
-					break;
-				case "}".code:
+				case "}".code if (br == 0):
 					revert();
 					break;
+				case "\n".code, ";".code:
+					if (br + bk + pr == 0)
+						break;
 				case "\"".code:
 					junk();
 					buf.add('"${parseString()}"');
+				case x if (isOpenBracket(x)):
+					switch x {
+						case "[".code: bk++;
+						case "{".code: br++;
+						case "(".code: pr++;
+						default: error("Unexpected " + String.fromCharCode(x));
+					}
+					buf.addChar(x);
+				case x if (isCloseBracket(x)):
+					switch x {
+						case "]".code if (bk > 0): bk--;
+						case "}".code if (br > 0): br--;
+						case ")".code if (pr > 0): pr--;
+						default: error("Unexpected " + String.fromCharCode(x));
+					}
+					buf.addChar(x);
 				case x if (isSpace(x)): // skip spaces
 				case x if (isEof(x)):
 					error("Unexpected End of file");

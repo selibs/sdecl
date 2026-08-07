@@ -6,6 +6,21 @@ global1 : 1
     a: true
     arr: [0]
 
+    flags: [
+        "a=1",
+        "b"
+    ]
+
+    options1: {
+        opt1: a
+        opt2: b
+    }
+
+    options2: { opt1: [a, (
+        b,
+        c
+    )] }
+
     Button { attr3: "string\"" + 1; attr32: false }
 
     @label { }
