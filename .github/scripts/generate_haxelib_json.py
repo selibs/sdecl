@@ -244,7 +244,9 @@ def main() -> None:
     repo_topics = topics_data.get("names") or []
 
     release_tag = release.get("tag_name") or ""
+    release_title = str(release.get("name") or "").strip()
     release_body = release.get("body") or ""
+    release_note = release_body.strip() or release_title or "New release"
 
     license_info = repo_data.get("license") or {}
     spdx_license = license_info.get("spdx_id")
@@ -259,9 +261,6 @@ def main() -> None:
             "Set license explicitly in haxelib.json."
         )
 
-    if not release_body.strip():
-        fail("GitHub Release body is empty. Fill release notes before publishing.")
-
     contributors = normalize_contributors(config.get("contributors"))
     if not contributors:
         contributors = get_github_contributors()
@@ -274,7 +273,7 @@ def main() -> None:
         "description": str(config.get("description") or repo_description),
         "version": str(config.get("version") or normalize_version(release_tag)),
         "classPath": str(config.get("classPath", "src")),
-        "releasenote": str(config.get("releasenote") or release_body.strip()),
+        "releasenote": str(config.get("releasenote") or release_note),
         "contributors": contributors,
     }
 
@@ -288,7 +287,7 @@ def main() -> None:
     package["description"] = str(package.get("description") or repo_description)
     package["version"] = str(package.get("version") or normalize_version(release_tag))
     package["classPath"] = str(package.get("classPath", "src"))
-    package["releasenote"] = str(package.get("releasenote") or release_body.strip())
+    package["releasenote"] = str(package.get("releasenote") or release_note)
     package["contributors"] = normalize_contributors(package.get("contributors"))
 
     if not package["description"]:
