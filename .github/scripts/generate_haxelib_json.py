@@ -48,7 +48,7 @@ def load_config() -> dict:
     return read_json_file(CONFIG_PATH)
 
 
-def github_api_get(path: str) -> dict:
+def github_api_get(path: str):
     token = os.environ.get("GITHUB_TOKEN")
     repo = os.environ.get("GITHUB_REPOSITORY")
 
@@ -59,6 +59,25 @@ def github_api_get(path: str) -> dict:
 
     request = urllib.request.Request(
         f"https://api.github.com/repos/{repo}{path}",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+
+    with urllib.request.urlopen(request) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def github_api_get_absolute(url: str):
+    token = os.environ.get("GITHUB_TOKEN")
+
+    if not token:
+        fail("GITHUB_TOKEN is missing")
+
+    request = urllib.request.Request(
+        url,
         headers={
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {token}",
@@ -164,6 +183,54 @@ def normalize_dependencies(dependencies) -> dict:
     }
 
 
+def get_github_contributors() -> list[str]:
+    repo = os.environ.get("GITHUB_REPOSITORY")
+    if not repo:
+        fail("GITHUB_REPOSITORY is missing")
+
+    per_page = 100
+    page = 1
+    result = []
+    seen = set()
+
+    while True:
+        path = f"/contributors?per_page={per_page}&page={page}"
+        data = github_api_get(path)
+
+        if not isinstance(data, list):
+            fail("Unexpected GitHub contributors response")
+
+        if not data:
+            break
+
+        for contributor in data:
+            if not isinstance(contributor, dict):
+                continue
+
+            login = str(contributor.get("login") or "").strip()
+            if not login or login in seen:
+                continue
+
+            seen.add(login)
+
+            contributor_url = str(contributor.get("url") or "").strip()
+            profile_name = ""
+
+            if contributor_url:
+                profile = github_api_get_absolute(contributor_url)
+                if isinstance(profile, dict):
+                    profile_name = str(profile.get("name") or "").strip()
+
+            result.append(profile_name or login)
+
+        if len(data) < per_page:
+            break
+
+        page += 1
+
+    return result
+
+
 def main() -> None:
     config = load_config()
     release = get_release_payload()
@@ -195,6 +262,10 @@ def main() -> None:
     if not release_body.strip():
         fail("GitHub Release body is empty. Fill release notes before publishing.")
 
+    contributors = normalize_contributors(config.get("contributors"))
+    if not contributors:
+        contributors = get_github_contributors()
+
     generated_package = {
         "name": normalize_name(config.get("name") or repo_name),
         "url": str(config.get("url") or repo_url),
@@ -204,7 +275,7 @@ def main() -> None:
         "version": str(config.get("version") or normalize_version(release_tag)),
         "classPath": str(config.get("classPath", "src")),
         "releasenote": str(config.get("releasenote") or release_body.strip()),
-        "contributors": normalize_contributors(config.get("contributors")),
+        "contributors": contributors,
     }
 
     package = dict(generated_package)
